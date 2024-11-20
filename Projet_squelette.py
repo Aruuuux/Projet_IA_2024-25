@@ -14,8 +14,46 @@ for i in range(42):
     player_type.append('AI: alpha-beta level '+str(i+1))
 
 def alpha_beta_decision(board, turn, ai_level, queue, max_player):
-    # random move (to modify)
-    queue.put(board.get_possible_moves()[rnd.randint(0, len(board.get_possible_moves()) - 1)])
+    def alpha_beta(board, depth, alpha, beta, maximizing_player):
+        if depth == 0 or board.check_victory() or turn >= 42:
+            return board.eval(max_player)
+
+        possible_moves = board.get_possible_moves()
+        if maximizing_player:
+            max_eval = float('-inf')
+            for move in possible_moves:
+                new_board = board.copy()
+                new_board.add_disk(move, max_player, update_display=False)
+                eval = alpha_beta(new_board, depth - 1, alpha, beta, False)
+                max_eval = max(max_eval, eval)
+                alpha = max(alpha, eval)
+                if beta <= alpha:
+                    break
+            return max_eval
+        else:
+            min_eval = float('inf')
+            for move in possible_moves:
+                new_board = board.copy()
+                new_board.add_disk(move, 3 - max_player, update_display=False)
+                eval = alpha_beta(new_board, depth - 1, alpha, beta, True)
+                min_eval = min(min_eval, eval)
+                beta = min(beta, eval)
+                if beta <= alpha:
+                    break
+            return min_eval
+
+    # Find the best move using alpha-beta
+    best_score = float('-inf')
+    best_move = None
+    for move in board.get_possible_moves():
+        new_board = board.copy()
+        new_board.add_disk(move, max_player, update_display=False)
+        score = alpha_beta(new_board, ai_level, float('-inf'), float('inf'), False)
+        if score > best_score:
+            best_score = score
+            best_move = move
+
+    queue.put(best_move)
 
 class Board:
     grid = np.array([[0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0],
@@ -23,7 +61,33 @@ class Board:
 
 
     def eval(self, player):
-        return 0
+        score = 0
+        opponent = 3 - player
+
+        def count_alignments(line):
+            score = 0
+            for i in range(len(line) - 3):
+                window = line[i:i + 4]
+                if np.count_nonzero(window == player) == 4:
+                    score += 10000  # Winning condition
+                elif np.count_nonzero(window == player) == 3 and np.count_nonzero(window == 0) == 1:
+                    score += 100  # Three aligned and one empty
+                elif np.count_nonzero(window == player) == 2 and np.count_nonzero(window == 0) == 2:
+                    score += 10  # Two aligned and two empty
+                if np.count_nonzero(window == opponent) == 3 and np.count_nonzero(window == 0) == 1:
+                    score -= 100  # Block opponent
+            return score
+
+        # Check rows, columns, and diagonals
+        for row in self.grid.T:
+            score += count_alignments(row)
+        for col in self.grid:
+            score += count_alignments(col)
+        for offset in range(-2, 4):  # Diagonal offsets
+            score += count_alignments(self.grid.diagonal(offset))
+            score += count_alignments(np.fliplr(self.grid).diagonal(offset))
+
+        return score
 
     def copy(self):
         new_board = Board()
