@@ -5,13 +5,12 @@ import random as rnd
 from threading import Thread
 from queue import Queue
 
-
 disk_color = ['white', 'red', 'orange']
 disks = list()
 
 player_type = ['human']
 for i in range(42):
-    player_type.append('AI: alpha-beta level '+str(i+1))
+    player_type.append('AI: alpha-beta level ' + str(i + 1))
 
 def alpha_beta_decision(board, turn, ai_level, queue, max_player):
     def alpha_beta(board, depth, alpha, beta, maximizing_player):
@@ -19,6 +18,14 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
             return board.eval(max_player)
 
         possible_moves = board.get_possible_moves()
+        
+        # Prioritize winning moves
+        for move in possible_moves:
+            new_board = board.copy()
+            new_board.add_disk(move, max_player if maximizing_player else 3 - max_player, update_display=False)
+            if new_board.check_victory():
+                return float('inf') if maximizing_player else float('-inf')
+
         if maximizing_player:
             max_eval = float('-inf')
             for move in possible_moves:
@@ -56,9 +63,8 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
     queue.put(best_move)
 
 class Board:
-    grid = np.array([[0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0],
-                     [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0]])
-
+    def __init__(self):
+        self.grid = np.zeros((6, 7), dtype=int)
 
     def eval(self, player):
         score = 0
@@ -79,9 +85,9 @@ class Board:
             return score
 
         # Check rows, columns, and diagonals
-        for row in self.grid.T:
+        for row in self.grid:
             score += count_alignments(row)
-        for col in self.grid:
+        for col in self.grid.T:
             score += count_alignments(col)
         for offset in range(-2, 4):  # Diagonal offsets
             score += count_alignments(self.grid.diagonal(offset))
@@ -91,63 +97,64 @@ class Board:
 
     def copy(self):
         new_board = Board()
-        new_board.grid = np.array(self.grid, copy=True)
+        new_board.grid = np.copy(self.grid)
         return new_board
 
     def reinit(self):
         self.grid.fill(0)
-        for i in range(7):
-            for j in range(6):
-                canvas1.itemconfig(disks[i][j], fill=disk_color[0])
+        for col in range(7):
+            for row in range(6):
+                canvas1.itemconfig(disks[col][row], fill=disk_color[0])
+
 
     def get_possible_moves(self):
-        possible_moves = list()
-        if self.grid[3][5] == 0:
-            possible_moves.append(3)
-        for shift_from_center in range(1, 4):
-            if self.grid[3 + shift_from_center][5] == 0:
-                possible_moves.append(3 + shift_from_center)
-            if self.grid[3 - shift_from_center][5] == 0:
-                possible_moves.append(3 - shift_from_center)
+        possible_moves = []
+        for col in range(7):
+            if self.grid[0][col] == 0:
+                possible_moves.append(col)
         return possible_moves
 
     def add_disk(self, column, player, update_display=True):
-        for j in range(6):
-            if self.grid[column][j] == 0:
+        for row in range(5, -1, -1):  # Remplir du bas vers le haut
+            if self.grid[row][column] == 0:
+                self.grid[row][column] = player
+                if update_display:
+                    canvas1.itemconfig(disks[column][5 - row], fill=disk_color[player])
                 break
-        self.grid[column][j] = player
-        if update_display:
-            canvas1.itemconfig(disks[column][j], fill=disk_color[player])
+
 
     def column_filled(self, column):
-        return self.grid[column][5] != 0
+        print(f"Vérification de la colonne {column}: {self.grid[0][column]}")
+        return self.grid[0][column] != 0
+
+
+
 
     def check_victory(self):
         # Horizontal alignment check
-        for line in range(6):
-            for horizontal_shift in range(4):
-                if self.grid[horizontal_shift][line] == self.grid[horizontal_shift + 1][line] == self.grid[horizontal_shift + 2][line] == self.grid[horizontal_shift + 3][line] != 0:
+        for row in range(6):
+            for col in range(4):
+                if self.grid[row][col] == self.grid[row][col + 1] == self.grid[row][col + 2] == self.grid[row][col + 3] != 0:
                     return True
         # Vertical alignment check
-        for column in range(7):
-            for vertical_shift in range(3):
-                if self.grid[column][vertical_shift] == self.grid[column][vertical_shift + 1] == \
-                        self.grid[column][vertical_shift + 2] == self.grid[column][vertical_shift + 3] != 0:
+        for col in range(7):
+            for row in range(3):
+                if self.grid[row][col] == self.grid[row + 1][col] == self.grid[row + 2][col] == self.grid[row + 3][col] != 0:
                     return True
         # Diagonal alignment check
-        for horizontal_shift in range(4):
-            for vertical_shift in range(3):
-                if self.grid[horizontal_shift][vertical_shift] == self.grid[horizontal_shift + 1][vertical_shift + 1] ==\
-                        self.grid[horizontal_shift + 2][vertical_shift + 2] == self.grid[horizontal_shift + 3][vertical_shift + 3] != 0:
+        for row in range(3):
+            for col in range(4):
+                if self.grid[row][col] == self.grid[row + 1][col + 1] == self.grid[row + 2][col + 2] == self.grid[row + 3][col + 3] != 0:
                     return True
-                elif self.grid[horizontal_shift][5 - vertical_shift] == self.grid[horizontal_shift + 1][4 - vertical_shift] ==\
-                        self.grid[horizontal_shift + 2][3 - vertical_shift] == self.grid[horizontal_shift + 3][2 - vertical_shift] != 0:
+                if self.grid[row + 3][col] == self.grid[row + 2][col + 1] == self.grid[row + 1][col + 2] == self.grid[row][col + 3] != 0:
                     return True
         return False
+    
+    def is_draw(self):
+        return not np.any(self.grid == 0)  # Retourne True si toutes les cases sont non nulles
 
 
 class Connect4:
-
     def __init__(self):
         self.board = Board()
         self.human_turn = False
@@ -162,8 +169,7 @@ class Connect4:
         self.board.reinit()
         self.turn = 0
         information['fg'] = 'black'
-        information['text'] = "Turn " + str(self.turn) + " - Player " + str(
-            self.current_player()) + " is playing"
+        information['text'] = "Turn " + str(self.turn) + " - Player " + str(self.current_player()) + " is playing"
         self.human_turn = False
         self.players = (combobox_player1.current(), combobox_player2.current())
         self.handle_turn()
@@ -192,15 +198,14 @@ class Connect4:
         self.human_turn = False
         if self.board.check_victory():
             information['fg'] = 'red'
-            information['text'] = "Player " + str(self.current_player()) + " wins !"
+            information['text'] = "Player " + str(self.current_player()) + " wins!"
             return
-        elif self.turn >= 42:
+        elif self.board.is_draw():  # Vérifie si le match est nul
             information['fg'] = 'red'
-            information['text'] = "This a draw !"
+            information['text'] = "This is a draw!"
             return
-        self.turn = self.turn + 1
-        information['text'] = "Turn " + str(self.turn) + " - Player " + str(
-            self.current_player()) + " is playing"
+        self.turn += 1
+        information['text'] = "Turn " + str(self.turn) + " - Player " + str(self.current_player()) + " is playing"
         if self.players[self.current_player() - 1] != 0:
             self.human_turn = False
             self.ai_turn(self.players[self.current_player() - 1])
@@ -224,10 +229,9 @@ canvas1 = tk.Canvas(window, bg="blue", width=width, height=height)
 # Drawing the grid
 for i in range(7):
     disks.append(list())
-    for j in range(5, -1, -1):
-        disks[i].append(canvas1.create_oval(row_margin + i * row_width, row_margin + j * row_height, (i + 1) * row_width - row_margin,
-                            (j + 1) * row_height - row_margin, fill='white'))
-
+    for j in range(6):
+        disks[i].append(canvas1.create_oval(row_margin + i * row_width, row_margin + (5 - j) * row_height, (i + 1) * row_width - row_margin,
+                            (6 - j) * row_height - row_margin, fill='white'))
 
 canvas1.grid(row=0, column=0, columnspan=2)
 
