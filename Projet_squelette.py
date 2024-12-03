@@ -4,6 +4,7 @@ import numpy as np
 import random as rnd
 from threading import Thread
 from queue import Queue
+from threading import Lock
 
 disk_color = ['white', 'red', 'orange']
 disks = list()
@@ -145,22 +146,22 @@ class Board:
         for row in range(6):
             for col in range(4):
                 if self.grid[row][col] == self.grid[row][col + 1] == self.grid[row][col + 2] == self.grid[row][col + 3] != 0:
-                    print(f"Horizontal win detected at row {row}, starting col {col}")
+                    #print(f"Horizontal win detected at row {row}, starting col {col}")
                     return True
         # Vertical alignment check
         for col in range(7):
             for row in range(3):
                 if self.grid[row][col] == self.grid[row + 1][col] == self.grid[row + 2][col] == self.grid[row + 3][col] != 0:
-                    print(f"Vertical win detected at col {col}, starting row {row}")
+                    #print(f"Vertical win detected at col {col}, starting row {row}")
                     return True
         # Diagonal alignment check
         for row in range(3):
             for col in range(4):
                 if self.grid[row][col] == self.grid[row + 1][col + 1] == self.grid[row + 2][col + 2] == self.grid[row + 3][col + 3] != 0:
-                    print(f"Diagonal win detected from top-left at row {row}, col {col}")
+                    #print(f"Diagonal win detected from top-left at row {row}, col {col}")
                     return True
                 if self.grid[row + 3][col] == self.grid[row + 2][col + 1] == self.grid[row + 1][col + 2] == self.grid[row][col + 3] != 0:
-                    print(f"Diagonal win detected from bottom-left at row {row + 3}, col {col}")
+                    #print(f"Diagonal win detected from bottom-left at row {row + 3}, col {col}")
                     return True
         return False
 
@@ -172,6 +173,7 @@ class Board:
 class Connect4:
     def __init__(self):
         self.board = Board()
+        self.lock = Lock()
         self.human_turn = False
         self.turn = 1
         self.players = (0, 0)
@@ -194,12 +196,12 @@ class Connect4:
         if not self.board.column_filled(column):
             self.board.add_disk(column, self.current_player())
             if self.board.check_victory():
-                print(f"Player {self.current_player()} wins!")
+                #print(f"Player {self.current_player()} wins!")
                 information['fg'] = 'red'
                 information['text'] = f"Player {self.current_player()} wins!"
                 return
             elif self.board.is_draw():
-                print("It's a draw!")
+                #print("It's a draw!")
                 information['fg'] = 'red'
                 information['text'] = "It's a draw!"
                 return
@@ -219,7 +221,8 @@ class Connect4:
         Thread(target=self._run_ai, args=(ai_level,)).start()
 
     def _run_ai(self, ai_level):
-        alpha_beta_decision(self.board, self.turn, ai_level, self.ai_move, self.current_player())
+        with self.lock:  # Verrouiller l'accès au plateau
+            alpha_beta_decision(self.board, self.turn, ai_level, self.ai_move, self.current_player())
         self.ai_thread_running = False
         self.ai_wait_for_move()
 
@@ -229,7 +232,6 @@ class Connect4:
             if column is not None and column in self.board.get_possible_moves():
                 self.move(column)
             else:
-                print("Invalid move received from AI.")
                 information['fg'] = 'red'
                 information['text'] = f"Error: Invalid move by AI. Ending game."
         else:
