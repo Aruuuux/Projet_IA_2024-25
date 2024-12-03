@@ -29,6 +29,7 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
         if maximizing_player:
             max_eval = float('-inf')
             for move in possible_moves:
+                print(f"Maximizing: Depth {depth}, Move {move}")
                 new_board = board.copy()
                 new_board.add_disk(move, max_player, update_display=False)
                 eval = alpha_beta(new_board, depth - 1, alpha, beta, False)
@@ -40,6 +41,7 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
         else:
             min_eval = float('inf')
             for move in possible_moves:
+                print(f"Minimizing: Depth {depth}, Move {move}")
                 new_board = board.copy()
                 new_board.add_disk(move, 3 - max_player, update_display=False)
                 eval = alpha_beta(new_board, depth - 1, alpha, beta, True)
@@ -52,7 +54,9 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
     # Find the best move using alpha-beta
     best_score = float('-inf')
     best_move = None
-    for move in board.get_possible_moves():
+    possible_moves = board.get_possible_moves()
+    
+    for move in possible_moves:
         new_board = board.copy()
         new_board.add_disk(move, max_player, update_display=False)
         score = alpha_beta(new_board, ai_level, float('-inf'), float('inf'), False)
@@ -60,7 +64,12 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
             best_score = score
             best_move = move
 
+    # Fallback to a random valid move if no best move was found
+    if best_move is None:
+        best_move = rnd.choice(possible_moves)
+
     queue.put(best_move)
+
 
 class Board:
     def __init__(self):
@@ -74,17 +83,19 @@ class Board:
             score = 0
             for i in range(len(line) - 3):
                 window = line[i:i + 4]
+                # Scoring logic for player
                 if np.count_nonzero(window == player) == 4:
                     score += 10000  # Winning condition
                 elif np.count_nonzero(window == player) == 3 and np.count_nonzero(window == 0) == 1:
-                    score += 100  # Three aligned and one empty
+                    score += 100  # Threat
                 elif np.count_nonzero(window == player) == 2 and np.count_nonzero(window == 0) == 2:
-                    score += 10  # Two aligned and two empty
+                    score += 10
+                # Penalize opponent alignments
                 if np.count_nonzero(window == opponent) == 3 and np.count_nonzero(window == 0) == 1:
-                    score -= 100  # Block opponent
+                    score -= 200  # Block opponent's threat
             return score
 
-        # Check rows, columns, and diagonals
+        # Apply to rows, columns, and diagonals
         for row in self.grid:
             score += count_alignments(row)
         for col in self.grid.T:
@@ -94,6 +105,7 @@ class Board:
             score += count_alignments(np.fliplr(self.grid).diagonal(offset))
 
         return score
+
 
     def copy(self):
         new_board = Board()
@@ -124,11 +136,7 @@ class Board:
 
 
     def column_filled(self, column):
-        print(f"Vérification de la colonne {column}: {self.grid[0][column]}")
         return self.grid[0][column] != 0
-
-
-
 
     def check_victory(self):
         # Horizontal alignment check
@@ -177,7 +185,19 @@ class Connect4:
     def move(self, column):
         if not self.board.column_filled(column):
             self.board.add_disk(column, self.current_player())
+            if self.board.check_victory():
+                print(f"Player {self.current_player()} wins!")
+                information['fg'] = 'red'
+                information['text'] = f"Player {self.current_player()} wins!"
+                return
+            elif self.board.is_draw():
+                print("It's a draw!")
+                information['fg'] = 'red'
+                information['text'] = "It's a draw!"
+                return
             self.handle_turn()
+        else:
+            print("Column is filled, choose another one.")
 
     def click(self, event):
         if self.human_turn:
@@ -190,9 +210,16 @@ class Connect4:
 
     def ai_wait_for_move(self):
         if not self.ai_move.empty():
-            self.move(self.ai_move.get())
+            column = self.ai_move.get()
+            if column is not None and column in self.board.get_possible_moves():
+                self.move(column)
+            else:
+                print("Invalid move received from AI.")
+                information['fg'] = 'red'
+                information['text'] = f"Error: Invalid move by AI. Ending game."
         else:
             window.after(100, self.ai_wait_for_move)
+
 
     def handle_turn(self):
         self.human_turn = False
@@ -200,7 +227,7 @@ class Connect4:
             information['fg'] = 'red'
             information['text'] = "Player " + str(self.current_player()) + " wins!"
             return
-        elif self.board.is_draw():  # Vérifie si le match est nul
+        elif self.board.is_draw():
             information['fg'] = 'red'
             information['text'] = "This is a draw!"
             return
