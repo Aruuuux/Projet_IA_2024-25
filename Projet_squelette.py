@@ -14,22 +14,14 @@ for i in range(42):
 
 def alpha_beta_decision(board, turn, ai_level, queue, max_player):
     def alpha_beta(board, depth, alpha, beta, maximizing_player):
-        if depth == 0 or board.check_victory() or turn >= 42:
+        if depth == 0 or board.check_victory() or board.is_draw():
             return board.eval(max_player)
 
         possible_moves = board.get_possible_moves()
-        
-        # Prioritize winning moves
-        for move in possible_moves:
-            new_board = board.copy()
-            new_board.add_disk(move, max_player if maximizing_player else 3 - max_player, update_display=False)
-            if new_board.check_victory():
-                return float('inf') if maximizing_player else float('-inf')
 
         if maximizing_player:
             max_eval = float('-inf')
             for move in possible_moves:
-                print(f"Maximizing: Depth {depth}, Move {move}")
                 new_board = board.copy()
                 new_board.add_disk(move, max_player, update_display=False)
                 eval = alpha_beta(new_board, depth - 1, alpha, beta, False)
@@ -41,7 +33,6 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
         else:
             min_eval = float('inf')
             for move in possible_moves:
-                print(f"Minimizing: Depth {depth}, Move {move}")
                 new_board = board.copy()
                 new_board.add_disk(move, 3 - max_player, update_display=False)
                 eval = alpha_beta(new_board, depth - 1, alpha, beta, True)
@@ -51,11 +42,23 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
                     break
             return min_eval
 
-    # Find the best move using alpha-beta
     best_score = float('-inf')
     best_move = None
     possible_moves = board.get_possible_moves()
-    
+
+    # Prioritize winning/blocking moves
+    for move in possible_moves:
+        new_board = board.copy()
+        new_board.add_disk(move, max_player, update_display=False)
+        if new_board.check_victory():
+            queue.put(move)
+            return
+        new_board.add_disk(move, 3 - max_player, update_display=False)
+        if new_board.check_victory():
+            queue.put(move)
+            return
+
+    # Evaluate all moves
     for move in possible_moves:
         new_board = board.copy()
         new_board.add_disk(move, max_player, update_display=False)
@@ -64,11 +67,10 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
             best_score = score
             best_move = move
 
-    # Fallback to a random valid move if no best move was found
-    if best_move is None:
-        best_move = rnd.choice(possible_moves)
-
-    queue.put(best_move)
+    if best_move is not None:
+        queue.put(best_move)
+    else:
+        queue.put(rnd.choice(possible_moves))  # Fallback if no best move is found
 
 
 class Board:
@@ -143,20 +145,25 @@ class Board:
         for row in range(6):
             for col in range(4):
                 if self.grid[row][col] == self.grid[row][col + 1] == self.grid[row][col + 2] == self.grid[row][col + 3] != 0:
+                    print(f"Horizontal win detected at row {row}, starting col {col}")
                     return True
         # Vertical alignment check
         for col in range(7):
             for row in range(3):
                 if self.grid[row][col] == self.grid[row + 1][col] == self.grid[row + 2][col] == self.grid[row + 3][col] != 0:
+                    print(f"Vertical win detected at col {col}, starting row {row}")
                     return True
         # Diagonal alignment check
         for row in range(3):
             for col in range(4):
                 if self.grid[row][col] == self.grid[row + 1][col + 1] == self.grid[row + 2][col + 2] == self.grid[row + 3][col + 3] != 0:
+                    print(f"Diagonal win detected from top-left at row {row}, col {col}")
                     return True
                 if self.grid[row + 3][col] == self.grid[row + 2][col + 1] == self.grid[row + 1][col + 2] == self.grid[row][col + 3] != 0:
+                    print(f"Diagonal win detected from bottom-left at row {row + 3}, col {col}")
                     return True
         return False
+
     
     def is_draw(self):
         return not np.any(self.grid == 0)  # Retourne True si toutes les cases sont non nulles
@@ -169,6 +176,7 @@ class Connect4:
         self.turn = 1
         self.players = (0, 0)
         self.ai_move = Queue()
+        self.ai_thread_running = False
 
     def current_player(self):
         return 2 - (self.turn % 2)
@@ -205,7 +213,14 @@ class Connect4:
             self.move(column)
 
     def ai_turn(self, ai_level):
-        Thread(target=alpha_beta_decision, args=(self.board, self.turn, ai_level, self.ai_move, self.current_player(),)).start()
+        if self.ai_thread_running:
+            return
+        self.ai_thread_running = True
+        Thread(target=self._run_ai, args=(ai_level,)).start()
+
+    def _run_ai(self, ai_level):
+        alpha_beta_decision(self.board, self.turn, ai_level, self.ai_move, self.current_player())
+        self.ai_thread_running = False
         self.ai_wait_for_move()
 
     def ai_wait_for_move(self):
