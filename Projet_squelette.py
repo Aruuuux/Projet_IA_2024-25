@@ -43,23 +43,27 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
                     break
             return min_eval
 
-    best_score = float('-inf')
-    best_move = None
     possible_moves = board.get_possible_moves()
 
-    # Prioritize winning/blocking moves
+    # 1. Prioriser les coups gagnants immédiats
     for move in possible_moves:
         new_board = board.copy()
         new_board.add_disk(move, max_player, update_display=False)
         if new_board.check_victory():
             queue.put(move)
             return
+
+    # 2. Prioriser les blocages de victoire immédiats de l'adversaire
+    for move in possible_moves:
+        new_board = board.copy()
         new_board.add_disk(move, 3 - max_player, update_display=False)
         if new_board.check_victory():
             queue.put(move)
             return
 
-    # Evaluate all moves
+    # 3. Évaluer tous les autres coups via Alpha-Bêta
+    best_score = float('-inf')
+    best_move = None
     for move in possible_moves:
         new_board = board.copy()
         new_board.add_disk(move, max_player, update_display=False)
@@ -71,7 +75,8 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
     if best_move is not None:
         queue.put(best_move)
     else:
-        queue.put(rnd.choice(possible_moves))  # Fallback if no best move is found
+        queue.put(rnd.choice(possible_moves))  # Fallback si aucun meilleur coup
+
 
 
 class Board:
@@ -79,35 +84,47 @@ class Board:
         self.grid = np.zeros((6, 7), dtype=int)
 
     def eval(self, player):
+        opponent = 3 - player  # L'adversaire
         score = 0
-        opponent = 3 - player
 
-        def count_alignments(line):
-            score = 0
-            for i in range(len(line) - 3):
-                window = line[i:i + 4]
-                # Scoring logic for player
-                if np.count_nonzero(window == player) == 4:
-                    score += 10000  # Winning condition
-                elif np.count_nonzero(window == player) == 3 and np.count_nonzero(window == 0) == 1:
-                    score += 100  # Threat
-                elif np.count_nonzero(window == player) == 2 and np.count_nonzero(window == 0) == 2:
-                    score += 10
-                # Penalize opponent alignments
-                if np.count_nonzero(window == opponent) == 3 and np.count_nonzero(window == 0) == 1:
-                    score -= 200  # Block opponent's threat
-            return score
+        def evaluate_window(window):
+            player_count = window.count(player)
+            opponent_count = window.count(opponent)
+            empty_count = window.count(0)
 
-        # Apply to rows, columns, and diagonals
+            if player_count == 4:  # Victoire pour le joueur
+                return 10000
+            elif player_count == 3 and empty_count == 1:
+                return 100  # Menace à 3 jetons
+            elif player_count == 2 and empty_count == 2:
+                return 10  # Menace faible
+
+            if opponent_count == 4:  # Victoire pour l'adversaire
+                return -10000
+            elif opponent_count == 3 and empty_count == 1:
+                return -200  # Blocage nécessaire
+            elif opponent_count == 2 and empty_count == 2:
+                return -10  # Alignement faible adversaire
+
+            return 0
+
+        # Parcourir toutes les fenêtres possibles
         for row in self.grid:
-            score += count_alignments(row)
+            for col in range(4):
+                score += evaluate_window(list(row[col:col + 4]))
+
         for col in self.grid.T:
-            score += count_alignments(col)
-        for offset in range(-2, 4):  # Diagonal offsets
-            score += count_alignments(self.grid.diagonal(offset))
-            score += count_alignments(np.fliplr(self.grid).diagonal(offset))
+            for row in range(3):
+                score += evaluate_window(list(col[row:row + 4]))
+
+        for offset in range(-2, 4):
+            score += sum(evaluate_window(list(self.grid.diagonal(offset)[i:i + 4]))
+                        for i in range(len(self.grid.diagonal(offset)) - 3))
+            score += sum(evaluate_window(list(np.fliplr(self.grid).diagonal(offset)[i:i + 4]))
+                        for i in range(len(np.fliplr(self.grid).diagonal(offset)) - 3))
 
         return score
+
 
 
     def copy(self):
