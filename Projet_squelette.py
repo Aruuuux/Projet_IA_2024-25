@@ -15,10 +15,14 @@ for i in range(42):
 
 def alpha_beta_decision(board, turn, ai_level, queue, max_player):
     def alpha_beta(board, depth, alpha, beta, maximizing_player):
+        # Condition d'arrêt dynamique : Victoire, match nul ou profondeur atteinte
         if depth == 0 or board.check_victory() or board.is_draw():
             return board.eval(max_player)
 
         possible_moves = board.get_possible_moves()
+
+        # Tri des coups possibles par potentiel (centralité et menaces immédiates)
+        possible_moves.sort(key=lambda move: simulate_move_score(board, move, max_player), reverse=maximizing_player)
 
         if maximizing_player:
             max_eval = float('-inf')
@@ -29,7 +33,7 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
                 max_eval = max(max_eval, eval)
                 alpha = max(alpha, eval)
                 if beta <= alpha:
-                    break
+                    break  # Coupure Alpha-Bêta
             return max_eval
         else:
             min_eval = float('inf')
@@ -40,31 +44,35 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
                 min_eval = min(min_eval, eval)
                 beta = min(beta, eval)
                 if beta <= alpha:
-                    break
+                    break  # Coupure Alpha-Bêta
             return min_eval
 
-    possible_moves = board.get_possible_moves()
+    def simulate_move_score(board, move, player):
+        """ Évalue rapidement un coup possible pour le tri """
+        temp_board = board.copy()
+        temp_board.add_disk(move, player, update_display=False)
+        return temp_board.eval(player)
 
-    # 1. Prioriser les coups gagnants immédiats
-    for move in possible_moves:
+    # Étape 1 : Vérifier les victoires immédiates
+    for move in board.get_possible_moves():
         new_board = board.copy()
         new_board.add_disk(move, max_player, update_display=False)
         if new_board.check_victory():
             queue.put(move)
             return
 
-    # 2. Prioriser les blocages de victoire immédiats de l'adversaire
-    for move in possible_moves:
+    # Étape 2 : Vérifier les blocages de victoire immédiate de l'adversaire
+    for move in board.get_possible_moves():
         new_board = board.copy()
         new_board.add_disk(move, 3 - max_player, update_display=False)
         if new_board.check_victory():
             queue.put(move)
             return
 
-    # 3. Évaluer tous les autres coups via Alpha-Bêta
+    # Étape 3 : Évaluer tous les autres coups via Alpha-Bêta
     best_score = float('-inf')
     best_move = None
-    for move in possible_moves:
+    for move in board.get_possible_moves():
         new_board = board.copy()
         new_board.add_disk(move, max_player, update_display=False)
         score = alpha_beta(new_board, ai_level, float('-inf'), float('inf'), False)
@@ -75,7 +83,8 @@ def alpha_beta_decision(board, turn, ai_level, queue, max_player):
     if best_move is not None:
         queue.put(best_move)
     else:
-        queue.put(rnd.choice(possible_moves))  # Fallback si aucun meilleur coup
+        queue.put(rnd.choice(board.get_possible_moves()))  # Fallback si aucun meilleur coup
+
 
 
 
@@ -84,8 +93,11 @@ class Board:
         self.grid = np.zeros((6, 7), dtype=int)
 
     def eval(self, player):
-        opponent = 3 - player  # L'adversaire
+        opponent = 3 - player
         score = 0
+
+        # Poids des colonnes (plus élevé au centre)
+        central_weight = [3, 4, 5, 7, 5, 4, 3]
 
         def evaluate_window(window):
             player_count = window.count(player)
@@ -95,16 +107,16 @@ class Board:
             if player_count == 4:  # Victoire pour le joueur
                 return 10000
             elif player_count == 3 and empty_count == 1:
-                return 100  # Menace à 3 jetons
+                return 100  # Menace forte
             elif player_count == 2 and empty_count == 2:
                 return 10  # Menace faible
 
             if opponent_count == 4:  # Victoire pour l'adversaire
                 return -10000
             elif opponent_count == 3 and empty_count == 1:
-                return -200  # Blocage nécessaire
+                return -200  # Menace de l'adversaire à bloquer
             elif opponent_count == 2 and empty_count == 2:
-                return -10  # Alignement faible adversaire
+                return -10  # Alignement faible de l'adversaire
 
             return 0
 
@@ -122,6 +134,14 @@ class Board:
                         for i in range(len(self.grid.diagonal(offset)) - 3))
             score += sum(evaluate_window(list(np.fliplr(self.grid).diagonal(offset)[i:i + 4]))
                         for i in range(len(np.fliplr(self.grid).diagonal(offset)) - 3))
+
+        # Ajout du poids des colonnes centrales
+        for row in range(6):
+            for col in range(7):
+                if self.grid[row][col] == player:
+                    score += central_weight[col]
+                elif self.grid[row][col] == opponent:
+                    score -= central_weight[col]
 
         return score
 
