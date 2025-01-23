@@ -130,7 +130,7 @@ class Board:
         score = 0
 
         # Pondérations pour favoriser le contrôle du centre de la grille
-        central_weight = [3, 4, 5, 7, 5, 4, 3]
+        weight = [3, 4, 5, 7, 5, 4, 3]
 
         def evaluate_window(window):
             """
@@ -187,9 +187,9 @@ class Board:
         for row in range(6):
             for col in range(7):
                 if self.grid[row][col] == player:
-                    score += central_weight[col]  # Bonus pour le joueur
+                    score += weight[col]  # Bonus pour le joueur
                 elif self.grid[row][col] == opponent:
-                    score -= central_weight[col]  # Malus pour l'adversaire
+                    score -= weight[col]  # Malus pour l'adversaire
 
         return score
 
