@@ -4,7 +4,7 @@ import numpy as np
 import random as rnd
 from threading import Thread
 from queue import Queue
-from threading import Lock
+
 
 disk_color = ['white', 'red', 'orange']
 disks = list()
@@ -109,8 +109,9 @@ def alpha_beta_decision(board, ai_level, queue, max_player):
 
 
 class Board:
-    def __init__(self):
-        self.grid = np.zeros((6, 7), dtype=int)
+    
+    grid = np.array([[0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0],
+                     [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0]])
 
     def eval(self, player):
         """
@@ -184,12 +185,14 @@ class Board:
                         for i in range(len(np.fliplr(self.grid).diagonal(offset)) - 3))
 
         # Ajout du bonus pour le contrôle des colonnes centrales
-        for row in range(6):
-            for col in range(7):
+        # Ajout du bonus pour le contrôle des colonnes centrales
+        for col in range(6):  # Parcours des lignes (car 6 lignes)
+            for row in range(7):  # Parcours des colonnes (car 7 colonnes)
                 if self.grid[row][col] == player:
-                    score += weight[col]  # Bonus pour le joueur
+                    score += weight[row]  # Utilisation correcte de l'indice de colonne
                 elif self.grid[row][col] == opponent:
-                    score -= weight[col]  # Malus pour l'adversaire
+                    score -= weight[row]  # Correction de l'indexation
+
 
         return score
 
@@ -209,45 +212,48 @@ class Board:
 
 
     def get_possible_moves(self):
-        possible_moves = []
-        for col in range(7):
-            if self.grid[0][col] == 0:
-                possible_moves.append(col)
+        possible_moves = list()
+        if self.grid[3][5] == 0:
+            possible_moves.append(3)
+        for shift_from_center in range(1, 4):
+            if self.grid[3 + shift_from_center][5] == 0:
+                possible_moves.append(3 + shift_from_center)
+            if self.grid[3 - shift_from_center][5] == 0:
+                possible_moves.append(3 - shift_from_center)
         return possible_moves
 
     def add_disk(self, column, player, update_display=True):
-        for row in range(5, -1, -1):  
-            if self.grid[row][column] == 0:
-                self.grid[row][column] = player
-                if update_display:
-                    canvas1.itemconfig(disks[column][5 - row], fill=disk_color[player])
+        for j in range(6):
+            if self.grid[column][j] == 0:
                 break
+        self.grid[column][j] = player
+        if update_display:
+            canvas1.itemconfig(disks[column][j], fill=disk_color[player])
 
 
     def column_filled(self, column):
-        return self.grid[0][column] != 0
+        return self.grid[column][5] != 0
 
     def check_victory(self):
-        
-        for row in range(6):
-            for col in range(4):
-                if self.grid[row][col] == self.grid[row][col + 1] == self.grid[row][col + 2] == self.grid[row][col + 3] != 0:
-                  
+        # Horizontal alignment check
+        for line in range(6):
+            for horizontal_shift in range(4):
+                if self.grid[horizontal_shift][line] == self.grid[horizontal_shift + 1][line] == self.grid[horizontal_shift + 2][line] == self.grid[horizontal_shift + 3][line] != 0:
                     return True
-        
-        for col in range(7):
-            for row in range(3):
-                if self.grid[row][col] == self.grid[row + 1][col] == self.grid[row + 2][col] == self.grid[row + 3][col] != 0:
-                    
+        # Vertical alignment check
+        for column in range(7):
+            for vertical_shift in range(3):
+                if self.grid[column][vertical_shift] == self.grid[column][vertical_shift + 1] == \
+                        self.grid[column][vertical_shift + 2] == self.grid[column][vertical_shift + 3] != 0:
                     return True
-      
-        for row in range(3):
-            for col in range(4):
-                if self.grid[row][col] == self.grid[row + 1][col + 1] == self.grid[row + 2][col + 2] == self.grid[row + 3][col + 3] != 0:
-                    
+        # Diagonal alignment check
+        for horizontal_shift in range(4):
+            for vertical_shift in range(3):
+                if self.grid[horizontal_shift][vertical_shift] == self.grid[horizontal_shift + 1][vertical_shift + 1] ==\
+                        self.grid[horizontal_shift + 2][vertical_shift + 2] == self.grid[horizontal_shift + 3][vertical_shift + 3] != 0:
                     return True
-                if self.grid[row + 3][col] == self.grid[row + 2][col + 1] == self.grid[row + 1][col + 2] == self.grid[row][col + 3] != 0:
-                    
+                elif self.grid[horizontal_shift][5 - vertical_shift] == self.grid[horizontal_shift + 1][4 - vertical_shift] ==\
+                        self.grid[horizontal_shift + 2][3 - vertical_shift] == self.grid[horizontal_shift + 3][2 - vertical_shift] != 0:
                     return True
         return False
 
@@ -259,12 +265,11 @@ class Board:
 class Connect4:
     def __init__(self):
         self.board = Board()
-        self.lock = Lock()
         self.human_turn = False
         self.turn = 1
         self.players = (0, 0)
         self.ai_move = Queue()
-        self.ai_thread_running = False
+        
 
     def current_player(self):
         return 2 - (self.turn % 2)
@@ -273,7 +278,8 @@ class Connect4:
         self.board.reinit()
         self.turn = 0
         information['fg'] = 'black'
-        information['text'] = "Turn " + str(self.turn) + " - Player " + str(self.current_player()) + " is playing"
+        information['text'] = "Turn " + str(self.turn) + " - Player " + str(
+            self.current_player()) + " is playing"
         self.human_turn = False
         self.players = (combobox_player1.current(), combobox_player2.current())
         self.handle_turn()
@@ -281,19 +287,7 @@ class Connect4:
     def move(self, column):
         if not self.board.column_filled(column):
             self.board.add_disk(column, self.current_player())
-            if self.board.check_victory():
-                
-                information['fg'] = 'red'
-                information['text'] = f"Player {self.current_player()} wins!"
-                return
-            elif self.board.is_draw():
-               
-                information['fg'] = 'red'
-                information['text'] = "It's a draw!"
-                return
             self.handle_turn()
-        else:
-            print("Column is filled, choose another one.")
 
     def click(self, event):
         if self.human_turn:
@@ -301,25 +295,13 @@ class Connect4:
             self.move(column)
 
     def ai_turn(self, ai_level):
-        if self.ai_thread_running:
-            return
-        self.ai_thread_running = True
-        Thread(target=self._run_ai, args=(ai_level,)).start()
-
-    def _run_ai(self, ai_level):
-        with self.lock:  
-            alpha_beta_decision(self.board, ai_level, self.ai_move, self.current_player())
-        self.ai_thread_running = False
+        Thread(target=alpha_beta_decision, args=(self.board, ai_level, self.ai_move, self.current_player(),)).start()
         self.ai_wait_for_move()
 
+    
     def ai_wait_for_move(self):
         if not self.ai_move.empty():
-            column = self.ai_move.get()
-            if column is not None and column in self.board.get_possible_moves():
-                self.move(column)
-            else:
-                information['fg'] = 'red'
-                information['text'] = f"Error: Invalid move by AI. Ending game."
+            self.move(self.ai_move.get())
         else:
             window.after(100, self.ai_wait_for_move)
 
@@ -328,14 +310,15 @@ class Connect4:
         self.human_turn = False
         if self.board.check_victory():
             information['fg'] = 'red'
-            information['text'] = "Player " + str(self.current_player()) + " wins!"
+            information['text'] = "Player " + str(self.current_player()) + " wins !"
             return
-        elif self.board.is_draw():
+        elif self.turn >= 42:
             information['fg'] = 'red'
-            information['text'] = "This is a draw!"
+            information['text'] = "This a draw !"
             return
-        self.turn += 1
-        information['text'] = "Turn " + str(self.turn) + " - Player " + str(self.current_player()) + " is playing"
+        self.turn = self.turn + 1
+        information['text'] = "Turn " + str(self.turn) + " - Player " + str(
+            self.current_player()) + " is playing"
         if self.players[self.current_player() - 1] != 0:
             self.human_turn = False
             self.ai_turn(self.players[self.current_player() - 1])
@@ -345,7 +328,7 @@ class Connect4:
 
 game = Connect4()
 
-
+# Graphical settings
 width = 700
 row_width = width // 7
 row_height = row_width
@@ -356,12 +339,13 @@ window = tk.Tk()
 window.title("Connect 4")
 canvas1 = tk.Canvas(window, bg="blue", width=width, height=height)
 
-
+# Drawing the grid
 for i in range(7):
     disks.append(list())
-    for j in range(6):
-        disks[i].append(canvas1.create_oval(row_margin + i * row_width, row_margin + (5 - j) * row_height, (i + 1) * row_width - row_margin,
-                            (6 - j) * row_height - row_margin, fill='white'))
+    for j in range(5, -1, -1):
+        disks[i].append(canvas1.create_oval(row_margin + i * row_width, row_margin + j * row_height, (i + 1) * row_width - row_margin,
+                            (j + 1) * row_height - row_margin, fill='white'))
+
 
 canvas1.grid(row=0, column=0, columnspan=2)
 
@@ -389,7 +373,7 @@ button2.grid(row=4, column=0)
 button = tk.Button(window, text='Quit', command=window.destroy)
 button.grid(row=4, column=1)
 
-
+# Mouse handling
 canvas1.bind('<Button-1>', game.click)
 
 window.mainloop()
